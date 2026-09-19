@@ -1,3 +1,8 @@
+export type GradientKey = "violet" | "cyan" | "emerald" | "amber" | "rose" | "sky";
+
+/** How buyers get the app after entering their key. */
+export type DeliveryType = "webapp" | "link";
+
 export interface AppItem {
   id: string;
   name: string;
@@ -6,12 +11,12 @@ export interface AppItem {
   price: number;
   icon: string; // emoji shown on the icon tile
   color: GradientKey; // gradient used for the icon tile
-  fileName: string; // original (sanitized) uploaded filename
+  delivery: DeliveryType; // "webapp" = runs on this site, "link" = unlocks a hidden URL
+  linkUrl?: string; // secret URL revealed to key holders (delivery === "link")
+  fileName: string; // display name of the upload (e.g. my-game.zip)
   fileSize: number; // bytes
   createdAt: string; // ISO
 }
-
-export type GradientKey = "violet" | "cyan" | "emerald" | "amber" | "rose" | "sky";
 
 export interface LicenseKey {
   id: string;

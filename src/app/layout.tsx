@@ -48,8 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link className="nav-link" href="/">
                 Apps
               </Link>
-              <Link className="nav-link" href="/download">
-                Download
+              <Link className="nav-link" href="/access">
+                Access app
               </Link>
               <Link className="nav-link" href="/admin">
                 Admin
@@ -77,7 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
             </span>
             <span className="faint" style={{ fontSize: 13 }}>
-              Secure key-based software delivery
+              Secure key-based app access
             </span>
           </div>
         </footer>

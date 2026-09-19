@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AppItem, GradientKey, LicenseKey, Settings } from "@/types";
+import type { AppItem, DeliveryType, GradientKey, LicenseKey, Settings } from "@/types";
 import {
   ICON_GRADIENTS,
   formatBytes,
@@ -46,6 +46,15 @@ async function copyText(t: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+function linkHost(url?: string): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
   }
 }
 
@@ -103,8 +112,13 @@ function AppFormModal({
   const [price, setPrice] = useState(existing ? String(existing.price) : "");
   const [icon, setIcon] = useState(existing?.icon ?? "📦");
   const [color, setColor] = useState<GradientKey>(existing?.color ?? "violet");
+  const [delivery, setDelivery] = useState<DeliveryType>(existing?.delivery ?? "webapp");
+  const [linkUrl, setLinkUrl] = useState(existing?.linkUrl ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // File required when creating a web app, or switching an existing app to webapp.
+  const fileRequired = delivery === "webapp" && (!existing || existing.delivery !== "webapp");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,6 +131,8 @@ function AppFormModal({
       fd.set("price", String(Number(price) || 0));
       fd.set("icon", icon || "📦");
       fd.set("color", color);
+      fd.set("delivery", delivery);
+      fd.set("linkUrl", linkUrl);
       if (file) fd.set("file", file);
 
       const res = await fetch(existing ? `/api/admin/apps/${existing.id}` : "/api/admin/apps", {
@@ -192,6 +208,89 @@ function AppFormModal({
         </div>
 
         <div className="field">
+          <label>How buyers get the app</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {(
+              [
+                {
+                  v: "webapp" as DeliveryType,
+                  emoji: "🌐",
+                  title: "Runs in browser",
+                  desc: "Upload a .zip or .html — buyers use it right on your site",
+                },
+                {
+                  v: "link" as DeliveryType,
+                  emoji: "🔗",
+                  title: "Hidden link",
+                  desc: "Set a secret URL — a valid key reveals it",
+                },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setDelivery(opt.v)}
+                style={{
+                  textAlign: "left",
+                  padding: "13px 15px",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  border: `1.5px solid ${delivery === opt.v ? "rgba(109,92,255,0.85)" : "var(--line)"}`,
+                  background: delivery === opt.v ? "rgba(109,92,255,0.12)" : "rgba(255,255,255,0.035)",
+                  color: "var(--ink)",
+                  fontFamily: "inherit",
+                  transition: "all .18s",
+                }}
+              >
+                <div style={{ fontSize: 19, marginBottom: 5 }}>{opt.emoji}</div>
+                <div style={{ fontWeight: 650, fontSize: 14 }}>{opt.title}</div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 3, lineHeight: 1.5 }}>
+                  {opt.desc}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {delivery === "webapp" ? (
+          <div className="field">
+            <label>
+              {existing ? "App files (upload only to replace)" : "App files *"}
+            </label>
+            <input
+              type="file"
+              className="input"
+              accept=".zip,.html,.htm"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              required={fileRequired}
+            />
+            <span className="faint" style={{ fontSize: 12.5 }}>
+              {existing
+                ? existing.delivery === "webapp" && existing.fileName
+                  ? `Current: ${existing.fileName} (${formatBytes(existing.fileSize)}).`
+                  : "No web files yet — upload a .zip or .html."
+                : "A .zip containing index.html, or a single .html file. Buyers will run it in their browser."}
+            </span>
+          </div>
+        ) : (
+          <div className="field">
+            <label>Hidden link *</label>
+            <input
+              className="input mono"
+              type="url"
+              style={{ fontSize: 13.5 }}
+              placeholder="https://drive.google.com/… or any secret URL"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              required
+            />
+            <span className="faint" style={{ fontSize: 12.5 }}>
+              Only revealed to customers holding a valid key — it never appears on the storefront.
+            </span>
+          </div>
+        )}
+
+        <div className="field">
           <label>Tile color</label>
           <div style={{ display: "flex", gap: 10 }}>
             {GRADIENT_KEYS.map((g) => (
@@ -207,21 +306,6 @@ function AppFormModal({
           </div>
         </div>
 
-        <div className="field">
-          <label>{existing ? "Replace app file (optional)" : "App file *"}</label>
-          <input
-            type="file"
-            className="input"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            required={!existing}
-          />
-          <span className="faint" style={{ fontSize: 12.5 }}>
-            {existing
-              ? `Current file: ${existing.fileName} (${formatBytes(existing.fileSize)}). Upload a new file only to replace it.`
-              : "The installer/archive buyers will download — .zip, .exe, .apk, .dmg, anything."}
-          </span>
-        </div>
-
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
             Cancel
@@ -229,7 +313,7 @@ function AppFormModal({
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? (
               <>
-                <span className="spinner" /> Uploading…
+                <span className="spinner" /> Saving…
               </>
             ) : existing ? (
               "Save changes"
@@ -259,7 +343,7 @@ function KeyFormModal({
   const [appId, setAppId] = useState(apps[0]?.id ?? "");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const [maxDownloads, setMaxDownloads] = useState("3");
+  const [maxDownloads, setMaxDownloads] = useState("10");
   const [expiresAt, setExpiresAt] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -324,7 +408,7 @@ function KeyFormModal({
         </div>
         <div style={{ display: "flex", gap: 14 }}>
           <div className="field" style={{ flex: 1 }}>
-            <label>Max downloads</label>
+            <label>Max accesses</label>
             <input
               className="input"
               type="number"
@@ -332,6 +416,9 @@ function KeyFormModal({
               value={maxDownloads}
               onChange={(e) => setMaxDownloads(e.target.value)}
             />
+            <span className="faint" style={{ fontSize: 12 }}>
+              Times the buyer can open the app with this key.
+            </span>
           </div>
           <div className="field" style={{ flex: 1 }}>
             <label>Expires on (optional)</label>
@@ -403,7 +490,7 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
   }
 
   async function deleteApp(app: AppItem) {
-    if (!window.confirm(`Delete "${app.name}"? Its file will be removed and all its license keys deleted.`)) return;
+    if (!window.confirm(`Delete "${app.name}"? Its files will be removed and all its license keys deleted.`)) return;
     const res = await fetch(`/api/admin/apps/${app.id}`, { method: "DELETE" });
     if (res.ok) {
       showToast(`"${app.name}" deleted`);
@@ -511,7 +598,7 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
         </div>
         <div className="stat" style={{ ["--stat-glow" as string]: "rgba(56,217,245,0.25)" }}>
           <div className="num">{totalDownloads}</div>
-          <div className="lbl">Total downloads</div>
+          <div className="lbl">Total accesses</div>
         </div>
         <div className="stat" style={{ ["--stat-glow" as string]: "rgba(255,194,75,0.22)" }}>
           <div className="num">{formatBytes(storageUsed)}</div>
@@ -556,8 +643,9 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
               <h3 className="display" style={{ fontSize: 20, fontWeight: 600, margin: "0 0 8px" }}>
                 Add your first application
               </h3>
-              <p className="muted" style={{ fontSize: 14.5, maxWidth: 460, margin: "0 auto 24px", lineHeight: 1.65 }}>
-                Upload your app file, set a price, then generate license keys for your customers.
+              <p className="muted" style={{ fontSize: 14.5, maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.65 }}>
+                Upload a web app (zip or HTML) or set a hidden link, then generate license keys
+                for your customers. Their key unlocks access — nothing to install.
               </p>
               <button className="btn btn-primary" onClick={() => setModal({ type: "add-app" })}>
                 + Add application
@@ -567,7 +655,7 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
               {apps.map((app) => {
                 const appKeys = keys.filter((k) => k.appId === app.id);
-                const appDownloads = appKeys.reduce((s, k) => s + k.downloadCount, 0);
+                const appAccesses = appKeys.reduce((s, k) => s + k.downloadCount, 0);
                 return (
                   <div key={app.id} className="card" style={{ padding: 22 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
@@ -579,19 +667,31 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
                           {app.name}
                         </div>
                         <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
-                          v{app.version} · {formatBytes(app.fileSize)}
+                          v{app.version}
+                          {app.delivery === "webapp" ? ` · ${formatBytes(app.fileSize)}` : " · external"}
                         </div>
                       </div>
                       <span className="chip">{formatPrice(app.price, settings.currency)}</span>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-                      <span className="chip mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                        📄 {app.fileName}
-                      </span>
+                      {app.delivery === "webapp" ? (
+                        <>
+                          <span className="chip">🌐 Web app</span>
+                          {app.fileName && (
+                            <span className="chip mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                              📄 {app.fileName}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="chip" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                          🔗 {linkHost(app.linkUrl)}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="muted" style={{ fontSize: 13 }}>
-                        {appKeys.length} key{appKeys.length === 1 ? "" : "s"} · {appDownloads} download{appDownloads === 1 ? "" : "s"}
+                        {appKeys.length} key{appKeys.length === 1 ? "" : "s"} · {appAccesses} access{appAccesses === 1 ? "" : "es"}
                       </span>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: "edit-app", app })}>
@@ -622,7 +722,7 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
               <p className="muted" style={{ fontSize: 14.5, maxWidth: 460, margin: "0 auto", lineHeight: 1.65 }}>
                 {apps.length === 0
                   ? "Add an application first, then generate keys for your customers."
-                  : "Generate a key for a customer and send it to them — they'll use it to download your app."}
+                  : "Generate a key for a customer and send it to them — they'll use it to access your app."}
               </p>
             </div>
           ) : (
@@ -633,7 +733,7 @@ export default function Dashboard({ initial, showDefaultPasswordWarning }: Props
                     <th>Key</th>
                     <th>Application</th>
                     <th>Customer</th>
-                    <th>Usage</th>
+                    <th>Accesses</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th style={{ textAlign: "right" }}>Actions</th>

@@ -32,6 +32,8 @@ export function readDB(): DB {
   cache!.keys ||= [];
   cache!.events ||= [];
   cache!.settings = { ...DEFAULT_SETTINGS, ...(cache!.settings || {}) };
+  // Migration: apps created before delivery types existed are treated as web apps.
+  for (const a of cache!.apps) a.delivery ||= "webapp";
   return cache!;
 }
 
@@ -52,10 +54,6 @@ export function writeDB(db: DB): Promise<void> {
 
 export function uploadDirFor(appId: string): string {
   return path.join(UPLOAD_DIR, appId);
-}
-
-export function filePathFor(app: AppItem): string {
-  return path.join(uploadDirFor(app.id), path.basename(app.fileName));
 }
 
 // ---- license key helpers ----
@@ -97,7 +95,7 @@ export function checkKey(db: DB, rawKey: string): KeyCheck {
   if (record.downloadCount >= record.maxDownloads)
     return {
       ok: false,
-      error: `This key has reached its download limit (${record.maxDownloads} download${record.maxDownloads === 1 ? "" : "s"}).`,
+      error: `This key has reached its access limit (${record.maxDownloads} use${record.maxDownloads === 1 ? "" : "s"}).`,
     };
   return { ok: true, record, app };
 }

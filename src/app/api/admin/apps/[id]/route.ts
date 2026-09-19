@@ -1,9 +1,8 @@
 import fs from "fs";
-import path from "path";
 import { isAdmin } from "@/lib/auth";
-import { readDB, writeDB, uploadDirFor, filePathFor } from "@/lib/db";
-import type { GradientKey } from "@/types";
-import { COLORS, sanitizeFileName } from "../route";
+import { readDB, writeDB, uploadDirFor } from "@/lib/db";
+import type { DeliveryType, GradientKey } from "@/types";
+import { COLORS, isValidLink, writeWebAppFiles } from "../route";
 
 export const runtime = "nodejs";
 
@@ -33,19 +32,45 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const colorRaw = String(fd.get("color") ?? "violet") as GradientKey;
   app.color = COLORS.includes(colorRaw) ? colorRaw : "violet";
 
+  const delivery: DeliveryType = fd.get("delivery") === "link" ? "link" : "webapp";
+  const linkUrl = String(fd.get("linkUrl") ?? "").trim();
   const file = fd.get("file");
-  if (file instanceof File && file.size > 0) {
-    const oldPath = filePathFor(app);
-    const safeName = sanitizeFileName(file.name);
-    const dir = uploadDirFor(app.id);
-    await fs.promises.mkdir(dir, { recursive: true });
-    const buf = Buffer.from(await file.arrayBuffer());
-    await fs.promises.writeFile(path.join(dir, safeName), buf);
-    if (oldPath !== path.join(dir, safeName)) {
-      await fs.promises.rm(oldPath, { force: true }).catch(() => {});
+
+  if (delivery === "link") {
+    const newUrl = linkUrl || app.linkUrl || "";
+    if (app.delivery !== "link" && !linkUrl)
+      return Response.json(
+        { error: "Enter the hidden link for this app (https://…)" },
+        { status: 400 }
+      );
+    if (!isValidLink(newUrl))
+      return Response.json(
+        { error: "Enter a valid link for this app (https://…)" },
+        { status: 400 }
+      );
+    app.delivery = "link";
+    app.linkUrl = newUrl;
+    // Web files are no longer needed.
+    app.fileName = "";
+    app.fileSize = 0;
+    await fs.promises.rm(uploadDirFor(app.id), { recursive: true, force: true }).catch(() => {});
+  } else {
+    app.delivery = "webapp";
+    app.linkUrl = undefined;
+    if (file instanceof File && file.size > 0) {
+      try {
+        const written = await writeWebAppFiles(uploadDirFor(app.id), file);
+        app.fileName = written.displayName;
+        app.fileSize = written.size;
+      } catch (e) {
+        return Response.json({ error: (e as Error).message }, { status: 400 });
+      }
+    } else if (!app.fileName) {
+      return Response.json(
+        { error: "Attach the web app — a .zip bundle or a single .html file." },
+        { status: 400 }
+      );
     }
-    app.fileName = safeName;
-    app.fileSize = buf.length;
   }
 
   await writeDB(db);

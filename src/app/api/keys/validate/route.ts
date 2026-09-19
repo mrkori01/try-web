@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       fileSize: check.app.fileSize,
       icon: check.app.icon,
       color: check.app.color,
+      delivery: check.app.delivery,
     },
     downloadsLeft: check.record.maxDownloads - check.record.downloadCount,
     expiresAt: check.record.expiresAt,

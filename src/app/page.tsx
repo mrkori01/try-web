@@ -31,13 +31,13 @@ export default function StoreFront() {
           style={{ fontSize: 18, lineHeight: 1.65, maxWidth: 620, margin: "24px auto 0" }}
         >
           {settings.tagline} Browse the catalog below, get a personal license key from the seller,
-          and download your app instantly.
+          and start using your app instantly.
         </p>
         <div className="rise d3" style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 38, flexWrap: "wrap" }}>
           <a href="#apps" className="btn btn-primary btn-xl">
             Browse apps
           </a>
-          <Link href="/download" className="btn btn-ghost btn-xl">
+          <Link href="/access" className="btn btn-ghost btn-xl">
             I have a key →
           </Link>
         </div>
@@ -65,8 +65,8 @@ export default function StoreFront() {
             },
             {
               n: "03",
-              t: "Download instantly",
-              d: "Enter your key on the download page and your file unlocks immediately.",
+              t: "Access instantly",
+              d: "Enter your key on the access page and your app unlocks right in your browser.",
             },
           ].map((s, i) => (
             <div key={s.n} className={`card rise d${i + 1}`} style={{ padding: "26px 26px 30px" }}>
@@ -142,7 +142,9 @@ export default function StoreFront() {
                       {formatPrice(app.price, settings.currency)}
                     </div>
                     <div className="faint" style={{ fontSize: 12.5 }}>
-                      {formatBytes(app.fileSize)} · digital download
+                      {app.delivery === "link"
+                        ? "Instant access link"
+                        : `Runs in browser · ${formatBytes(app.fileSize)}`}
                     </div>
                   </div>
                   <a href="#buy" className="btn btn-primary btn-sm">
@@ -186,8 +188,8 @@ export default function StoreFront() {
           </p>
           {isPlaceholderContact(settings.contactInfo) ? null : (
             <div style={{ marginTop: 26 }}>
-              <Link href="/download" className="btn btn-ghost">
-                Already have a key? Download now →
+              <Link href="/access" className="btn btn-ghost">
+                Already have a key? Access your app →
               </Link>
             </div>
           )}
